@@ -11,12 +11,12 @@ frs.rules = {
     , number    = P"-"^-1 * V'digits' * (P"." * V'digits')^-1 * (S"Ee" * P'-'^-1 * V'digits')^-1
                 + P"0x" * V'xdigit'^1
     , string    = P"\"" * (1 - P"\\\"")^0 * P"\""
-    , literal   = V'label'
-                + V'string'
+    , literal   = V'string'
                 + V'number'
-    , sexpr = "(" * V'ws' * (V'label' * (V'ws' * V'expr')^0)^-1 * V'ws' * ")"
+    , sexpr = "(" * (V'ws' * V'expr')^0 * V'ws' * ")"
     , expr  = V'sexpr'
             + V'literal'
+            + V'label'
 }
 lpeg.locale(frs.rules)
 
@@ -29,14 +29,9 @@ function frs.fill(t, t2)
     return t
 end
 
-local stdlib, stdmacros
 function frs.context()
-    stdlib = stdlib or require 'stdlib'
-    stdmacros = macros or require 'stdmacros'
-    local atoms = {}
-    setmetatable(atoms, {__index=stdlib})
-    local macros = {}
-    setmetatable(macros, {__index=stdmacros})
+    atoms = dofile 'stdlib.lua'
+    macros = dofile 'stdmacros.lua'
     local ctx = {env = frs, atoms = atoms, macros = macros}
     local captures = {
         V'expr' * Cp()
@@ -52,7 +47,7 @@ function frs.context()
             return "Syntax error at column "..len
         end
         --print(frs.show(ast))
-        return stdlib.eval(ctx, ast)
+        return ctx.atoms.eval(ctx, ast)
     end
     ctx.interactive = function()
         while true do
@@ -61,7 +56,7 @@ function frs.context()
             if input == "quit" or input == "exit" then
                 return
             end
-            local success, res = pcall(ctx.exec, input or "")
+            local success, res = xpcall(function() return ctx.exec(input or "") end, debug.traceback)
             if success then
                 print(frs.show(res))
             else
