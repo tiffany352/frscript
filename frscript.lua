@@ -10,7 +10,8 @@ frs.rules = {
     , label = (V'alpha' + V'digit' + S"~!@#$%^&*_-+=/<>'")^1
     , number    = P"-"^-1 * V'digits' * (P"." * V'digits')^-1 * (S"Ee" * P'-'^-1 * V'digits')^-1
                 + P"0x" * V'xdigit'^1
-    , string    = P"\"" * (1 - P"\\\"")^0 * P"\""
+    , string    = P"\"" * V'string_mid' * P"\""
+    , string_mid = (1 - P"\"")^0
     , literal   = V'string'
                 + V'number'
     , sexpr = "(" * (V'ws' * V'expr')^0 * V'ws' * ")"
@@ -41,12 +42,13 @@ function frs.context()
         , number = frs.rules.number/tonumber
         , literal = Ct(Cc'literal' * frs.rules.literal)
         , label = C(frs.rules.label)
+        , string_mid = C(frs.rules.string_mid)
     }
     local grammar = P(frs.fill(captures, frs.rules))
     ctx.exec = function(str)
         local ast, len = grammar:match(str)
-        if len < #str then
-            return "Syntax error at column "..len
+        if (len or 0) < #str then
+            error("Syntax error at column "..tostring(len))
         end
         --print(frs.show(ast))
         return ctx.atoms.eval(ctx, ast)
