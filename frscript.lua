@@ -14,7 +14,7 @@ frs.rules = {
     , literal   = V'label'
                 + V'string'
                 + V'number'
-    , sexpr = "(" * V'ws' * V'label' * (V'ws' * V'expr')^0 * V'ws' * ")"
+    , sexpr = "(" * V'ws' * (V'label' * (V'ws' * V'expr')^0)^-1 * V'ws' * ")"
     , expr  = V'sexpr'
             + V'literal'
 }
@@ -29,27 +29,44 @@ function frs.fill(t, t2)
     return t
 end
 
-local stdlib
+local stdlib, stdmacros
 function frs.context()
     stdlib = stdlib or require 'stdlib'
+    stdmacros = macros or require 'stdmacros'
     local atoms = {}
     setmetatable(atoms, {__index=stdlib})
-    local ctx = {env = frs, atoms = atoms}
+    local macros = {}
+    setmetatable(macros, {__index=stdmacros})
+    local ctx = {env = frs, atoms = atoms, macros = macros}
     local captures = {
-        V'expr'
-        , sexpr = frs.rules.sexpr/function(...)return stdlib.eval(ctx,...) end
+        V'expr' * Cp()
+        , sexpr = Ct(frs.rules.sexpr)
         , number = frs.rules.number/tonumber
-        , label = C(frs.rules.label)/function(...)return stdlib.var(ctx, ...) end
+        , literal = Ct(Cc'literal' * frs.rules.literal)
+        , label = C(frs.rules.label)
     }
     local grammar = P(frs.fill(captures, frs.rules))
     ctx.exec = function(str)
-        return grammar:match(str)
+        local ast, len = grammar:match(str)
+        if len < #str then
+            return "Syntax error at column "..len
+        end
+        --print(frs.show(ast))
+        return stdlib.eval(ctx, ast)
     end
     ctx.interactive = function()
         while true do
             io.stdout:write("= ")
-            local res = ctx.exec(io.stdin:read())
-            print(frs.show(res))
+            local input = io.stdin:read()
+            if input == "quit" or input == "exit" then
+                return
+            end
+            local success, res = pcall(ctx.exec, input or "")
+            if success then
+                print(frs.show(res))
+            else
+                print(res)
+            end
         end
     end
     return ctx
@@ -60,6 +77,14 @@ function frs.fold(f, acc, t)
         acc = f(acc, k, v)
     end
     return acc
+end
+
+function frs.map(f, t)
+    local t2 = {}
+    for i, v in pairs(t) do
+        t2[i] = f(v)
+    end
+    return t2
 end
 
 function frs.show(v, t, is_key)
@@ -109,6 +134,8 @@ function frs.show(v, t, is_key)
         end
         return s.." )"
     elseif type(v) == "userdata" then
+        return tostring(v)
+    elseif type(v) == "boolean" then
         return tostring(v)
     else
         return "NYI: "..type(v)
