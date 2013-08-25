@@ -29,6 +29,8 @@ function frs.fill(t, t2)
     return t
 end
 
+frs.print = print
+
 function frs.context()
     atoms = dofile 'stdlib.lua'
     macros = dofile 'stdmacros.lua'
