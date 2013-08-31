@@ -5,7 +5,7 @@ pub enum Pattern<'self, T> {
     // reference into a hash table containing the pattern
     Rule(&'self str),
 
-    // matches and consumes
+    // lexing
     Literal(&'self str),
     Range(char, char),
     Chars(uint),
@@ -17,53 +17,53 @@ pub enum Pattern<'self, T> {
     Seq(~[Pattern<'self, T>]),
     Or(~[Pattern<'self, T>]),
     Diff(~Pattern<'self, T>, ~Pattern<'self, T>),
-    //Match(~Pattern<'self, T>, ~fn(&Pattern<'self, T>, &Token<'self, T>) -> uint),
 
     // matches but doesn't consume
     And(~Pattern<'self, T>),
-    Always,
+    Always(T),
 
-    // controls visibility
-    Merge(~Pattern<'self, T>),
-    Select(uint, ~Pattern<'self, T>),
+    // parsing
     Var(~Pattern<'self, T>),
     Ref(~Pattern<'self, T>),
-    //Fold(~Pattern<'self, T>, ~fn(&'self Pattern<'self, T>, Token<'self, T>) -> Option<Token<'self, T>>),
-    Build(~Pattern<'self, T>, ~fn(~str) -> Option<T>)
+    Build(~Pattern<'self, T>, ~fn(~str) -> Option<T>),
+    Map(~Pattern<'self, T>, ~fn(T) -> Option<T>)
 }
 
-pub struct Token<'self, T> {
-    children: ~[Token<'self, T>],
+#[deriving(Clone)]
+pub struct Token<T> {
     value: T,
-    pat: &'self Pattern<'self, T>,
     start: uint,
     end: uint
 }
 
 pub struct ParseContext<'self, T> {
     grammar: HashMap<&'self str, Pattern<'self, T>>,
-    variables: HashMap<~str, Token<'self, T>>,
-    make_token: ~fn(~str) -> T
+    variables: HashMap<~str, Token<T>>,
+    make_token: ~fn(~str) -> T,
+    make_sequence: ~fn(~[Token<T>]) -> T
 }
 
 impl<'self, T> ParseContext<'self, T> {
-    pub fn new(make_token: ~fn(~str) -> T) -> ParseContext<'self, T> {
-        ParseContext {grammar: HashMap::new(), make_token: make_token, variables: HashMap::new()}
+    pub fn new(make_token: ~fn(~str) -> T, make_sequence: ~fn(~[Token<T>]) -> T) -> ParseContext<'self, T> {
+        ParseContext {grammar: HashMap::new(), make_token: make_token, make_sequence: make_sequence, variables: HashMap::new()}
     }
     pub fn rule(&mut self, name: &'self str, rule: Pattern<'self, T>) {
         self.grammar.insert(name, rule);
     }
 }
 
-pub fn parse<'a,'b, T:'static>(ctx: &'a ParseContext<'a, T>, pat: &'a Pattern<'a, T>, text: &str, position: uint) -> Option<Token<'a,T>> {
-    let tok = |children, start, end| {
-        Some(Token {children: children, value: (ctx.make_token)(text.slice(start, end).to_owned()), pat: pat, start: start+position, end: end+position})
+pub fn parse<'a,'b, T:'static+Clone>(ctx: &'a ParseContext<'a, T>, pat: &'a Pattern<'a, T>, text: &str, position: uint) -> Option<Token<T>> {
+    let tok = |start, end| {
+        Some(Token {value: (ctx.make_token)(text.slice(start, end).to_owned()), start: start+position, end: end+position})
+    };
+    let seq = |children, start:uint, end:uint| {
+        Some(Token {value: (ctx.make_sequence)(children), start: start+position, end: end+position})
     };
     match *pat {
         Rule(name) => parse(ctx, ctx.grammar.get(&name), text, position),
         Literal(s) => {
             if text.len() >= s.len() && text.slice_to(s.len()) == s {
-                tok(~[], 0, s.len())
+                tok(0, s.len())
             } else {
                 None
             }
@@ -74,14 +74,14 @@ pub fn parse<'a,'b, T:'static>(ctx: &'a ParseContext<'a, T>, pat: &'a Pattern<'a
             }
             let CharRange{ch, next} = text.char_range_at(0);
             if ch <= y && ch >= x {
-                tok(~[], 0, next)
+                tok(0, next)
             } else {
                 None
             }
         }
         Chars(n) => {
             if text.len() >= n {
-                tok(~[], 0, n)
+                tok(0, n)
             } else {
                 None
             }
@@ -93,7 +93,7 @@ pub fn parse<'a,'b, T:'static>(ctx: &'a ParseContext<'a, T>, pat: &'a Pattern<'a
             let CharRange{ch, next} = text.char_range_at(0);
             for elem in arr.iter() {
                 if *elem == ch {
-                    return tok(~[], 0, next)
+                    return tok(0, next)
                 }
             }
             None
@@ -110,7 +110,7 @@ pub fn parse<'a,'b, T:'static>(ctx: &'a ParseContext<'a, T>, pat: &'a Pattern<'a
                     None => break
                 }
             }
-            tok(res, 0, acc)
+            seq(res, 0, acc)
         }
         MoreThan(n, ref p) => {
             let mut acc = 0;
@@ -133,7 +133,7 @@ pub fn parse<'a,'b, T:'static>(ctx: &'a ParseContext<'a, T>, pat: &'a Pattern<'a
                     None => break
                 }
             }
-            tok(res, 0, acc)
+            seq(res, 0, acc)
         }
         Exactly(n, ref p) => {
             let mut acc = 0;
@@ -147,7 +147,7 @@ pub fn parse<'a,'b, T:'static>(ctx: &'a ParseContext<'a, T>, pat: &'a Pattern<'a
                     None => return None
                 }
             }
-            tok(res, 0, acc)
+            seq(res, 0, acc)
         }
         LessThan(n, ref p) => {
             let mut acc = 0;
@@ -161,7 +161,7 @@ pub fn parse<'a,'b, T:'static>(ctx: &'a ParseContext<'a, T>, pat: &'a Pattern<'a
                     None => break
                 }
             }
-            tok(res, 0, acc)
+            seq(res, 0, acc)
         }
         Seq(ref arr) => {
             let mut acc = 0;
@@ -175,7 +175,7 @@ pub fn parse<'a,'b, T:'static>(ctx: &'a ParseContext<'a, T>, pat: &'a Pattern<'a
                     None => return None
                 }
             }
-            tok(res, 0, acc)
+            seq(res, 0, acc)
         }
         Or(ref arr) => {
             for elem in arr.iter() {
@@ -190,48 +190,26 @@ pub fn parse<'a,'b, T:'static>(ctx: &'a ParseContext<'a, T>, pat: &'a Pattern<'a
             Some(_) => None,
             None => parse(ctx, *a, text, position)
         },
-        /*Match(ref p, ref f) => match parse(ctx, *p, text, position) {
-            Some(x) => {
-                let res = (*f)(*p, &x);
-                let xstart = x.start;
-                tok(~[x], xstart-position, res-position)
-            }
-            None => None
-        },*/
         And(ref p) => match parse(ctx, *p, text, position) {
-            Some(x) => tok(~[x], 0, 0),
+            Some(x) => Some(Token {value: x.value, start: 0, end: 0}),
             None => None
         },
-        Always => tok(~[], 0, 0),
-        Merge(ref p) => match parse(ctx, *p, text, position) {
-            Some(x) => tok(~[], x.start-position, x.end-position),
-            None => None
-        },
-        Select(n, ref p) => match parse(ctx, *p, text, position) {
-            Some(x) => match x.children.len() {
-                l if l <= n => None,
-                _ => {
-                    let start = x.start;
-                    let end = x.end;
-                    let t = x.children[n];
-                    let v = t.value;
-                    Some(Token {children: ~[], value: v, pat: pat, start: start, end: end})
-                }
-            },
-            None => None
-        },
+        Always(ref v) => Some(Token {value: v.clone(), start: 0, end: 0}),
         // var and ref would require adding another parameter to parse()
-        /*Fold(ref p, ref f) => match parse(ctx, *p, text, position) {
-            Some(x) => (*f)(*p, x),
-            None => None
-        },*/
         Build(ref p, ref f) => match parse(ctx, *p, text, position) {
             Some(x) => match (*f)(text.slice(x.start-position, x.end-position).to_owned()) {
                 Some(v) => {
                     let s = x.start;
                     let e = x.end;
-                    Some(Token {children: ~[x], value: v, pat: pat, start: s, end: e})
+                    Some(Token {value: v, start: s, end: e})
                 }
+                None => None
+            },
+            None => None
+        },
+        Map(ref p, ref f) => match parse(ctx, *p, text, position) {
+            Some(x) => match (*f)(x.value.clone()) {
+                Some(v) => Some(Token {value: v, start: x.start, end: x.end}),
                 None => None
             },
             None => None
