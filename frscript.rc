@@ -1,0 +1,13 @@
+#[ link(name = "frscript",
+        vers = "0.0",
+        uuid = "62527026-e47c-44ce-be34-7137e8194772") ];
+
+#[ desc = "FRP Scripting Language" ];
+#[ license = "Zlib/libpng" ];
+#[ author = "tiffany" ];
+
+#[ crate_type="lib" ];
+
+pub mod parse;
+pub mod grammar;
+
