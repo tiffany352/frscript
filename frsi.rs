@@ -3,20 +3,25 @@ extern mod frscript;
 use frscript::parse::*;
 use frscript::grammar::*;
 use std::io::*;
+use frscript::eval::*;
+use frscript::context::*;
+use frscript::stdlib::*;
 
-fn pretty_error(err: Error) {
-    for _ in range(0, err.start+2) {
+fn pretty_error(line: LineInfo, err: ~str) {
+    for _ in range(0, line.startslice+2) {
         print(" ");
     }
-    for _ in range(err.start, err.end) {
+    for _ in range(line.startslice, line.endslice) {
         print("^");
     }
     println("");
-    println(err.to_str());
+    println(err);
 }
 
 fn main() {
-    let ctx = grammar();
+    let grammar = grammar();
+    let mut state = Context::new();
+    register_stdlib(&mut state);
     loop {
         print("= ");
         let line = stdin().read_line();
@@ -24,10 +29,16 @@ fn main() {
             ~"quit" => return,
             ~"exit" => return,
             _ => {
-                let res = parse(&ctx, ctx.grammar.get(& &"sexpr"), line, 0);
+                let res = parse(&grammar, grammar.grammar.get(& &"sexpr"), line, 0);
                 match res {
-                    Ok(x) => println(fmt!("%?", x)),
-                    Err(x) => pretty_error(x)
+                    Err(x) => pretty_error(x.line, x.to_str()),
+                    Ok(x) => {
+                        //println(fmt!("%?", x));
+                        match eval(&mut state, x) {
+                            Ok(v) => println(fmt!("%?", v)),
+                            Err(e) => pretty_error(e.line, e.to_str())
+                        }
+                    }
                 }
             }
         }

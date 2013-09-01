@@ -1,6 +1,7 @@
 use std::str::*;
 use std::hashmap::*;
 
+#[deriving(Clone)]
 pub enum Pattern<'self, T> {
     // reference into a hash table containing the pattern
     Rule(&'self str),
@@ -25,27 +26,98 @@ pub enum Pattern<'self, T> {
     // parsing
     Var(~Pattern<'self, T>),
     Ref(~Pattern<'self, T>),
-    Build(~Pattern<'self, T>, ~fn(~str) -> Result<T, ~str>),
-    Map(~Pattern<'self, T>, ~fn(T) -> Result<T, ~str>)
+    Build(~Pattern<'self, T>, extern fn(~str) -> Result<T, ~str>),
+    Map(~Pattern<'self, T>, extern fn(T) -> Result<T, ~str>)
+}
+
+impl<'self, T:Clone> Mul<~Pattern<'self, T>, ~Pattern<'self, T>> for ~Pattern<'self, T> {
+    fn mul(&self, rhs: &~Pattern<'self, T>) -> ~Pattern<'self, T> {
+        match (*self.clone(), *rhs.clone()) {
+            (Seq(x), y      ) => ~Seq(x + ~[y]),
+            (x,      Seq(y) ) => ~Seq(~[x] + y),
+            (x,      y      ) => ~Seq(~[x, y])
+        }
+    }
+}
+
+impl<'self, T:Clone> Add<~Pattern<'self, T>, ~Pattern<'self, T>> for ~Pattern<'self, T> {
+    fn add(&self, rhs: &~Pattern<'self, T>) -> ~Pattern<'self, T> {
+        match (*self.clone(), *rhs.clone()) {
+            (Or(x), y     ) => ~Or(x + ~[y]),
+            (x,     Or(y) ) => ~Or(~[x] + y),
+            (x,     y     ) => ~Or(~[x, y])
+        }
+    }
+}
+
+impl<'self, T:Clone> Index<int, ~Pattern<'self, T>> for ~Pattern<'self, T> {
+    fn index(&self, rhs: &int) -> ~Pattern<'self, T> {
+        match (*rhs) {
+            0 => ~More(self.clone()),
+            x if x < 0 => ~LessThan(-x as uint, self.clone()),
+            x => ~MoreThan(x as uint, self.clone())
+        }
+    }
+}
+
+#[deriving(Clone)]
+pub struct LineInfo {
+    line: int,
+    startcol: uint,
+    endcol: uint,
+    startslice: uint,
+    endslice: uint
+}
+
+impl LineInfo {
+    pub fn new(text: &str, start: uint, end: uint) -> LineInfo {
+        fn compute_line(text: &str, max: uint) -> (int, uint) {
+            let mut line = 0;
+            let mut offset = 0;
+            let mut temp = 0;
+            for c in text.iter() {
+                if c == '\n' {
+                    line += 1;
+                    offset += temp;
+                    temp = 0;
+                }
+                temp += 1;
+                if temp >= max {
+                    break;
+                }
+            }
+            (line, offset)
+        }
+        let (line, offset) = compute_line(text, start);
+        LineInfo {line: line, startcol: start-offset, endcol: end-offset, startslice: start, endslice: end}
+    }
+}
+
+impl ToStr for LineInfo {
+    fn to_str(&self) -> ~str {
+        match (self.line, self.startcol, self.endcol) {
+            (0, -1, -1) => ~"",
+            (0, s, e)   => fmt!("[%u:%u]", s, e),
+            (l, -1, -1) => fmt!("[line %i]", l),
+            (l, s, e)   => fmt!("[line %i @ %u:%u]", l, s, e),
+        }
+    }
 }
 
 #[deriving(Clone)]
 pub struct Token<T> {
     value: T,
-    start: uint,
-    end: uint
+    line: LineInfo
 }
 
-pub struct Error {
+pub struct SyntaxError {
     pats: ~[~str],
     instead: Option<~str>,
     user_msg: Option<~str>,
-    line: int,
-    start: uint,
-    end: uint
+    line: LineInfo
 }
 
-impl ToStr for Error {
+impl ToStr for SyntaxError {
     fn to_str(&self) -> ~str {
         fn pretty_arr(arr: ~[~str]) -> ~str {
             let len = arr.len();
@@ -62,13 +134,8 @@ impl ToStr for Error {
                 s
             }
         }
-        let mut err = match (self.line, self.start, self.end) {
-            (0, -1, -1) => ~"",
-            (0, s, e)   => fmt!("[%u:%u] ", s, e),
-            (l, -1, -1) => fmt!("[line %i] ", l),
-            (l, s, e)   => fmt!("[line %i @ %u:%u] ", l, s, e),
-        };
-        err.push_str(fmt!("Expected %s", pretty_arr(self.pats.clone())));
+        let mut err = self.line.to_str();
+        err.push_str(fmt!(" Expected %s", pretty_arr(self.pats.clone())));
         match self.instead.clone() {
             Some(x) => err.push_str(fmt!(", got %s", x)),
             None => ()
@@ -92,38 +159,20 @@ impl<'self, T> ParseContext<'self, T> {
     pub fn new(make_token: ~fn(~str) -> T, make_sequence: ~fn(~[Token<T>]) -> T) -> ParseContext<'self, T> {
         ParseContext {grammar: HashMap::new(), make_token: make_token, make_sequence: make_sequence, variables: HashMap::new()}
     }
-    pub fn rule(&mut self, name: &'self str, rule: Pattern<'self, T>) {
-        self.grammar.insert(name, rule);
+    pub fn rule(&mut self, name: &'self str, rule: ~Pattern<'self, T>) {
+        self.grammar.insert(name, *rule);
     }
 }
 
-pub fn parse<'a,'b, T:'static+Clone>(ctx: &'a ParseContext<'a, T>, pat: &'a Pattern<'a, T>, text: &str, position: uint) -> Result<Token<T>, Error> {
+pub fn parse<'a,'b, T:'static+Clone>(ctx: &'a ParseContext<'a, T>, pat: &'a Pattern<'a, T>, text: &str, position: uint) -> Result<Token<T>, SyntaxError> {
     let tok = |start, end| {
-        Ok(Token {value: (ctx.make_token)(text.slice(start, end).to_owned()), start: start+position, end: end+position})
+        Ok(Token {value: (ctx.make_token)(text.slice(start, end).to_owned()), line: LineInfo::new(text, start+position, end+position)})
     };
     let seq = |children, start:uint, end:uint| {
-        Ok(Token {value: (ctx.make_sequence)(children), start: start+position, end: end+position})
+        Ok(Token {value: (ctx.make_sequence)(children), line: LineInfo::new(text, start+position, end+position)})
     };
-    fn compute_line(text: &str, max: uint) -> (int, uint) {
-        let mut line = 0;
-        let mut offset = 0;
-        let mut temp = 0;
-        for c in text.iter() {
-            if c == '\n' {
-                line += 1;
-                offset += temp;
-                temp = 0;
-            }
-            temp += 1;
-            if temp >= max {
-                break;
-            }
-        }
-        (line, offset)
-    }
     let err = |name, instead, start:uint, end:uint| {
-        let (line, offset) = compute_line(text, start+position);
-        Err(Error {pats: ~[name], instead: instead, user_msg: None, line: line, start: start+position-offset, end: end+position-offset})
+        Err(SyntaxError {pats: ~[name], instead: instead, user_msg: None, line: LineInfo::new(text, start+position, end+position)})
     };
     match *pat {
         Rule(name) => parse(ctx, ctx.grammar.get(&name), text, position),
@@ -170,7 +219,7 @@ pub fn parse<'a,'b, T:'static+Clone>(ctx: &'a ParseContext<'a, T>, pat: &'a Patt
             while acc <= text.len() {
                 match parse(ctx, *p, text.slice_from(acc), acc + position) {
                     Ok(x) => {
-                        acc = x.end - position;
+                        acc = x.line.endslice - position;
                         res.push(x);
                     }
                     Err(_) => break
@@ -184,7 +233,7 @@ pub fn parse<'a,'b, T:'static+Clone>(ctx: &'a ParseContext<'a, T>, pat: &'a Patt
             for _ in range(0, n) {
                 match parse(ctx, *p, text.slice_from(acc), acc + position) {
                     Ok(x) => {
-                        acc = x.end - position;
+                        acc = x.line.endslice - position;
                         res.push(x);
                     }
                     Err(x) => return Err(x)
@@ -193,7 +242,7 @@ pub fn parse<'a,'b, T:'static+Clone>(ctx: &'a ParseContext<'a, T>, pat: &'a Patt
             while acc <= text.len() {
                 match parse(ctx, *p, text.slice_from(acc), acc + position) {
                     Ok(x) => {
-                        acc = x.end - position;
+                        acc = x.line.endslice - position;
                         res.push(x);
                     }
                     Err(_) => break
@@ -207,7 +256,7 @@ pub fn parse<'a,'b, T:'static+Clone>(ctx: &'a ParseContext<'a, T>, pat: &'a Patt
             for _ in range(0, n) {
                 match parse(ctx, *p, text.slice_from(acc), acc + position) {
                     Ok(x) => {
-                        acc = x.end - position;
+                        acc = x.line.endslice - position;
                         res.push(x);
                     }
                     Err(x) => return Err(x)
@@ -221,7 +270,7 @@ pub fn parse<'a,'b, T:'static+Clone>(ctx: &'a ParseContext<'a, T>, pat: &'a Patt
             for _ in range(0, n) {
                 match parse(ctx, *p, text.slice_from(acc), acc + position) {
                     Ok(x) => {
-                        acc = x.end - position;
+                        acc = x.line.endslice - position;
                         res.push(x);
                     }
                     Err(_) => break
@@ -235,7 +284,7 @@ pub fn parse<'a,'b, T:'static+Clone>(ctx: &'a ParseContext<'a, T>, pat: &'a Patt
             for elem in arr.iter() {
                 match parse(ctx, elem, text.slice_from(acc), position + acc) {
                     Ok(x) => {
-                        acc = x.end - position;
+                        acc = x.line.endslice - position;
                         res.push(x);
                     }
                     Err(x) => return Err(x)
@@ -257,31 +306,27 @@ pub fn parse<'a,'b, T:'static+Clone>(ctx: &'a ParseContext<'a, T>, pat: &'a Patt
             Err(_) => parse(ctx, *a, text, position)
         },
         And(ref p) => match parse(ctx, *p, text, position) {
-            Ok(x) => Ok(Token {value: x.value, start: 0, end: 0}),
+            Ok(x) => Ok(Token {value: x.value, line: LineInfo::new(text, position, position)}),
             Err(x) => Err(x)
         },
-        Always(ref v) => Ok(Token {value: v.clone(), start: 0, end: 0}),
+        Always(ref v) => Ok(Token {value: v.clone(), line: LineInfo::new(text, position, position)}),
         // var and ref would require adding another parameter to parse()
         Build(ref p, ref f) => match parse(ctx, *p, text, position) {
-            Ok(x) => match (*f)(text.slice(x.start-position, x.end-position).to_owned()) {
+            Ok(x) => match (*f)(text.slice(x.line.startslice-position, x.line.endslice-position).to_owned()) {
                 Ok(v) => {
-                    let s = x.start;
-                    let e = x.end;
-                    Ok(Token {value: v, start: s, end: e})
+                    Ok(Token {value: v, line: x.line})
                 }
                 Err(s) => {
-                    let (line, offset) = compute_line(text, x.start);
-                    Err(Error {pats: ~[fmt!("%?", p)], instead: None, user_msg: Some(s), line: line, start: x.start-offset, end: x.end-offset})
+                    Err(SyntaxError {pats: ~[fmt!("%?", p)], instead: None, user_msg: Some(s), line: x.line})
                 }
             },
             Err(x) => Err(x)
         },
         Map(ref p, ref f) => match parse(ctx, *p, text, position) {
             Ok(x) => match (*f)(x.value.clone()) {
-                Ok(v) => Ok(Token {value: v, start: x.start, end: x.end}),
+                Ok(v) => Ok(Token {value: v, line: x.line}),
                 Err(s) => {
-                    let (line, offset) = compute_line(text, x.start);
-                    Err(Error {pats: ~[fmt!("%?", p)], instead: None, user_msg: Some(s), line: line, start: x.start-offset, end: x.end-offset})
+                    Err(SyntaxError {pats: ~[fmt!("%?", p)], instead: None, user_msg: Some(s), line: x.line})
                 }
             },
             Err(x) => Err(x)

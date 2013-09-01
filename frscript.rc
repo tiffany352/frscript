@@ -10,4 +10,7 @@
 
 pub mod parse;
 pub mod grammar;
+pub mod eval;
+pub mod context;
+pub mod stdlib;
 
