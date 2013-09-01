@@ -20,6 +20,17 @@ pub enum FRValue {
     Function(~extern fn(&mut Context,~[FRValue]) -> Result<FRValue, ~str>)
 }
 
+impl ToStr for FRValue {
+    fn to_str(&self) -> ~str {
+        match self.clone() {
+            String(s)   => fmt!("\"%s\"", s),
+            Number(n)   => fmt!("%f", n),
+            List(l)     => "(" + l.map(|x| x.to_str()).connect(" ") + ")",
+            Function(_) => ~"<Function>"
+        }
+    }
+}
+
 pub struct Scope {
     atoms: HashMap<~str, FRValue>
 }

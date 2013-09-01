@@ -35,7 +35,7 @@ fn main() {
                     Ok(x) => {
                         //println(fmt!("%?", x));
                         match eval(&mut state, x) {
-                            Ok(v) => println(fmt!("%?", v)),
+                            Ok(v) => println(v.to_str()),
                             Err(e) => pretty_error(e.line, e.to_str())
                         }
                     }

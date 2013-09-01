@@ -21,14 +21,14 @@ fn make_number(s: ~str) -> Result<FRToken, ~str> {
 
 fn make_sequence(seq: ~[Token<FRToken>]) -> FRToken {
     FRSeq(seq.iter()
-             .filter(|x| match x.value {Unparsed(_)=> false, Whitespace=>false, _=>true})
+             .filter(|x| match x.value {Whitespace=>false, _=>true})
              .map(|x| x.clone())
              .collect())
 }
 
 fn make_sexpr(tok: FRToken) -> Result<FRToken, ~str> {
     fn recurse(arr: ~[Token<FRToken>]) -> ~[Token<FRToken>] {
-        arr.flat_map(|x| match x.value.clone() {FRSeq(a) => recurse(a), _ => ~[x.clone()]})
+        arr.flat_map(|x| match x.value.clone() {FRSeq(a) => recurse(a), Unparsed(_) => ~[], _ => ~[x.clone()]})
     }
     match tok {
         FRSeq(a) => Ok(SExpr(recurse(a))),
@@ -36,9 +36,13 @@ fn make_sexpr(tok: FRToken) -> Result<FRToken, ~str> {
     }
 }
 
+fn make_string_mid(text: ~str) -> Result<FRToken, ~str> {
+    Ok(Unparsed(text))
+}
+
 fn make_string(tok: FRToken) -> Result<FRToken, ~str> {
     match tok {
-        FRSeq(a) => match a[0].value {
+        FRSeq(a) => match a[1].value {
             Unparsed(s) => Ok(String(s)),
             _ => Err(~"Failed to construct string")
         },
@@ -65,7 +69,7 @@ fn grammar() -> ParseContext<FRToken> {
     ctx.rule("number",      ~Build(~LessThan(1, ~Literal("-")) * ~Rule("digits") * ~LessThan(1, ~Literal(".") * ~Rule("digits")) * ~LessThan(1, ~Set("eE".iter().collect()) * ~LessThan(1, ~Literal("-")) * ~Rule("digits")), make_number));
     ctx.rule("symbol",      ~Set("~!@#$%^&*_-+=/<>'".iter().collect()));
     ctx.rule("atom",        ~Build((~Rule("alpha") + ~Rule("digit") + ~Rule("symbol"))[1], make_label));
-    ctx.rule("string_mid",  ~More(~Diff(~Literal("\\\"") + ~Chars(1), ~Literal("\""))));
+    ctx.rule("string_mid",  ~Build(~More(~Diff(~Literal("\\\"") + ~Chars(1), ~Literal("\""))), make_string_mid));
     ctx.rule("string",      ~Map(~Literal("\"") * ~Rule("string_mid") * ~Literal("\""), make_string));
     ctx.rule("sexpr",       ~Map(~Literal("(") * ~Rule("ws") * ~LessThan(1, ~Rule("expr")) * (~Rule("sws") * ~Rule("expr"))[0] * ~Rule("ws") * ~Literal(")"), make_sexpr));
     ctx.rule("expr",        ~Rule("sexpr") + ~Rule("number") + ~Rule("atom") + ~Rule("string"));

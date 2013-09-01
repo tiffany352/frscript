@@ -11,7 +11,12 @@ fn add(_: &mut Context, args: ~[FRValue]) -> Result<FRValue, ~str> {
     Ok(Number(sum))
 }
 
+fn list(_: &mut Context, args: ~[FRValue]) -> Result<FRValue, ~str> {
+    Ok(List(args))
+}
+
 fn register_stdlib(ctx: &mut Context) {
     ctx.global.atoms.insert(~"+", Function(~add));
+    ctx.global.atoms.insert(~"list", Function(~list));
 }
 
