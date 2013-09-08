@@ -6,6 +6,7 @@ use std::io::*;
 use frscript::eval::*;
 use frscript::context::*;
 use frscript::stdlib::*;
+use frscript::types::*;
 
 fn pretty_error(line: LineInfo, err: ~str) {
     for _ in range(0, line.startslice+2) {
@@ -29,14 +30,15 @@ fn main() {
             ~"quit" => return,
             ~"exit" => return,
             _ => {
-                let res = parse(&grammar, grammar.grammar.get(& &"sexpr"), line, 0);
-                match res {
-                    Err(x) => pretty_error(x.line, x.to_str()),
+                match parse(&grammar, grammar.grammar.get(& &"sexpr"), line, 0) {
+                    Err(e) => pretty_error(e.line, e.to_str()),
                     Ok(x) => {
-                        //println(fmt!("%?", x));
-                        match eval(&mut state, x) {
-                            Ok(v) => println(v.to_str()),
-                            Err(e) => pretty_error(e.line, e.to_str())
+                        match typecheck(&mut state.global, x.clone()) {
+                            Err(e) => pretty_error(e.line, e.to_str()),
+                            Ok(x) => match eval(&mut state, x) {
+                                Ok(v) => println(v.to_str()),
+                                Err(e) => pretty_error(e.line, e.to_str())
+                            }
                         }
                     }
                 }

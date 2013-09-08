@@ -12,5 +12,6 @@ pub mod parse;
 pub mod grammar;
 pub mod eval;
 pub mod context;
+pub mod types;
 pub mod stdlib;
 

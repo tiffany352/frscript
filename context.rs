@@ -1,5 +1,6 @@
 use std::hashmap::*;
 use parse::*;
+use types;
 
 pub struct EvalError {
     msg: ~str,
@@ -17,16 +18,27 @@ pub enum FRValue {
     String(~str),
     Number(float),
     List(~[FRValue]),
-    Function(~extern fn(&mut Context,~[FRValue]) -> Result<FRValue, ~str>)
+    Function(@types::FRType, ~extern fn(&mut Context,~[FRValue]) -> Result<FRValue, ~str>)
+}
+
+impl types::FRTypeOf for FRValue {
+    fn FRtype_of(&self) -> @types::FRType {
+        match self.clone() {
+            String(_) => @types::String,
+            Number(_) => @types::Float,
+            List(_) => @types::List,
+            Function(t, _) => t
+        }
+    }
 }
 
 impl ToStr for FRValue {
     fn to_str(&self) -> ~str {
         match self.clone() {
-            String(s)   => fmt!("\"%s\"", s),
-            Number(n)   => fmt!("%f", n),
-            List(l)     => "(" + l.map(|x| x.to_str()).connect(" ") + ")",
-            Function(_) => ~"<Function>"
+            String(s)       => fmt!("\"%s\"", s),
+            Number(n)       => fmt!("%f", n),
+            List(l)         => "(" + l.map(|x| x.to_str()).connect(" ") + ")",
+            Function(t, _)  => fmt!("%?", t)
         }
     }
 }
