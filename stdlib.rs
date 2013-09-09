@@ -1,7 +1,4 @@
 use context::*;
-use context;
-use types::*;
-use types;
 use ast::*;
 
 fn add(_: &mut Context, args: ~[FRValue]) -> Result<FRValue, ~str> {
@@ -9,7 +6,7 @@ fn add(_: &mut Context, args: ~[FRValue]) -> Result<FRValue, ~str> {
     for v in args.iter() {
         match *v {
             Number(n) => sum += n,
-            _ => return Err(fmt!("Expected number, got %?", v))
+            _ => return Err(fmt!("WTF: Expected number, got %?, this should have been caught by the type checker", v))
         }
     }
     Ok(Number(sum))
@@ -29,8 +26,8 @@ fn typeeq(_: &mut Context, args: ~[FRValue]) -> Result<FRValue, ~str> {
 
 fn register_stdlib(ctx: &mut Context) {
     ctx.global.define(~"+",      Function(~add),    @Func(~[Float, Float, Float]));
-    ctx.global.define(~"list",   Function(~list),   @Func(~[Any, types::List]));
-    ctx.global.define(~"typeof", Function(~typeof), @Func(~[Any, types::String]));
-    ctx.global.define(~"typeeq", Function(~typeeq), @Func(~[Any, Any, types::String]));
+    ctx.global.define(~"list",   Function(~list),   @Func(~[Any, ListT]));
+    ctx.global.define(~"typeof", Function(~typeof), @Func(~[Any, StringT]));
+    ctx.global.define(~"typeeq", Function(~typeeq), @Func(~[Any, Any, StringT]));
 }
 

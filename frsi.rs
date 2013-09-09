@@ -7,7 +7,7 @@ use frscript::eval::*;
 use frscript::context::*;
 use frscript::stdlib::*;
 use frscript::types::*;
-use frscript::ast;
+use frscript::ast::*;
 
 fn pretty_error(line: LineInfo, err: ~str) {
     for _ in range(0, line.startslice+2) {
@@ -32,14 +32,14 @@ fn main() {
             ~"exit" => return,
             _ => match parse(&grammar, grammar.grammar.get(& &"expr"), line, 0) {
                 Err(e) => pretty_error(e.line, e.to_str()),
-                Ok(x) => {
-                    println(fmt!("%?", ast::build_ast(&mut state.global, x.clone())));
-                    match typecheck(&mut state.global, x.clone()) {
+                Ok(tree) => match build_ast(&mut state.global, tree.clone()) {
                     Err(e) => pretty_error(e.line, e.to_str()),
-                    Ok(x) => match eval(&mut state, x) {
-                        Ok(v) => println(v.to_str()),
-                        Err(e) => pretty_error(e.line, e.to_str())
-                    }
+                    Ok(ast) => match typecheck(&mut state.global, ast.clone()) {
+                        Err(e) => pretty_error(e.line, e.to_str()),
+                        Ok(ast) => match eval(&mut state, ast) {
+                            Ok(v) => println(v.to_str()),
+                            Err(e) => pretty_error(e.line, e.to_str())
+                        }
                     }
                 }
             }

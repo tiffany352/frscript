@@ -1,7 +1,89 @@
 use parse::*;
-use types::*;
 use context;
 use grammar;
+
+#[deriving(Clone)]
+pub enum FRType {
+    ListT,
+    Trait(~str),
+    HasField(~str, ~FRType),
+    Union(~[FRType]),
+    Func(~[FRType]),
+    StringT,
+    Integer,
+    Float,
+    Any,
+    Unit,
+}
+
+impl ToStr for FRType {
+    fn to_str(&self) -> ~str {
+        match self.clone() {
+            ListT => ~"list",
+            Trait(name) => name.clone(),
+            HasField(name, T) => name + ": " + T.to_str(),
+            Union(a) => a.map(|v| v.to_str()).connect(" + "),
+            Func(a) => a.map(|v| v.to_str()).connect(" -> "),
+            StringT => ~"str",
+            Integer => ~"int",
+            Float => ~"float",
+            Any => ~"any",
+            Unit => ~"()",
+        }
+    }
+}
+
+pub trait FRTypeOf {
+    fn FRtype_of(&self) -> @FRType;
+}
+
+impl FRTypeOf for FRValue {
+    fn FRtype_of(&self) -> @FRType {
+        match self.clone() {
+            String(_)   => @StringT,
+            Number(_)   => @Float,
+            List(_)     => @ListT,
+            Function(_) => @Unit,
+            Nil         => @Unit,
+        }
+    }
+}
+
+impl Eq for FRType {
+    fn eq(&self, other: &FRType) -> bool {
+        match (self.clone(), other.clone()) {
+            (Union(x), Union(y))                => x.iter().zip(y.iter()).map(|(u, v)| u == v).all(|w| w),
+            (Func(x), Func(y))                  => x.iter().zip(y.iter()).map(|(u, v)| u == v).all(|w| w),
+            (Trait(x), Trait(y))                => x == y,
+            (HasField(x, u), HasField(y, v))    => x == y && u == v,
+            (ListT, ListT)                      => true,
+            (StringT, StringT)                  => true,
+            (Integer, Integer)                  => true,
+            (Float, Float)                      => true,
+            (Any, _)                            => true,
+            (Unit, Unit)                        => true,
+            _                                   => false
+        }
+    }
+}
+
+impl FRType {
+    fn compatible(&self, other: &FRType) -> bool {
+        match (self.clone(), other.clone()) {
+            (ListT, ListT)                      => true,
+            (Trait(x), Trait(y))                => x == y, // TODO: trait inheritance
+            (HasField(x, u), HasField(y, v))    => x == y && u == v,
+            (Union(x), Union(y))                => x.iter().map(|u| y.iter().any(|v| u == v)).all(|w| w),
+            (Func(x), Func(y))                  => x.iter().map(|u| y.iter().any(|v| u == v)).all(|w| w),
+            (StringT, StringT)                  => true,
+            (Integer, Integer)                  => true,
+            (Float, Float)                      => true,
+            (Any, _)                            => true,
+            (Unit, Unit)                        => true,
+            _                                   => false
+        }
+    }
+}
 
 #[deriving(Clone)]
 pub enum FRValue {
@@ -24,12 +106,14 @@ impl ToStr for FRValue {
     }
 }
 
+#[deriving(Clone)]
 pub enum ASTNode {
     Expr(~str, ~[AST]),
     Var(~str),
     Literal(FRValue)
 }
 
+#[deriving(Clone)]
 pub struct AST {
     node: ASTNode,
     line: LineInfo,
