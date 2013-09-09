@@ -2,6 +2,17 @@ use parse::*;
 use context::*;
 use ast::*;
 
+pub struct EvalError {
+    msg: ~str,
+    line: LineInfo
+}
+
+impl ToStr for EvalError {
+    fn to_str(&self) -> ~str {
+        self.line.to_str() + ": " + self.msg.clone()
+    }
+}
+
 fn call(ctx: &mut Context, f: ~extern fn(&mut Context,~[FRValue]) -> Result<FRValue, ~str>, args: ~[AST], line: LineInfo) -> Result<FRValue, EvalError> {
     let mut res = ~[];
     for arg in args.iter() {

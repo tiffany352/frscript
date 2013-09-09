@@ -1,17 +1,5 @@
 use std::hashmap::*;
-use parse::*;
 use ast::*;
-
-pub struct EvalError {
-    msg: ~str,
-    line: LineInfo
-}
-
-impl ToStr for EvalError {
-    fn to_str(&self) -> ~str {
-        self.line.to_str() + ": " + self.msg.clone()
-    }
-}
 
 pub struct Scope {
     atoms: HashMap<~str, (FRValue, @FRType)>,
