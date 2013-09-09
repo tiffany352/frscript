@@ -6,7 +6,7 @@ use std::io::*;
 use frscript::eval::*;
 use frscript::context::*;
 use frscript::stdlib::*;
-use frscript::types::*;
+use frscript::typechecker::*;
 use frscript::ast::*;
 
 fn pretty_error(line: LineInfo, err: ~str) {
