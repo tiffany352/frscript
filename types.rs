@@ -43,6 +43,7 @@ pub enum FRAst {
     StringL(~str),
     IntegerL(int),
     FloatL(float),
+    Nil,
     Var(~str, @FRType),
 }
 
@@ -53,6 +54,7 @@ impl FRTypeOf for FRAst {
             StringL(_) => @String,
             IntegerL(_) => @Integer,
             FloatL(_) => @Float,
+            Nil => @Unit,
             Var(_, t) => t
         }
     }
@@ -107,7 +109,7 @@ impl ToStr for TypeError {
 
 pub fn get_type(scope: &context::Scope, name: ~str) -> Result<@FRType, ~str> {
     match scope.lookup(name.clone()) {
-        Some(v) => Ok(v.FRtype_of()),
+        Some((_, t)) => Ok(t),
         None => Err(fmt!("No such variable %s", name)),
     }
 }
@@ -124,7 +126,7 @@ pub fn typecheck(scope: &mut context::Scope, token: Token<grammar::FRToken>) -> 
         grammar::Number(v) => Ok(Token {value: FloatL(v), line: token.line}),
         grammar::SExpr(expr) => {
             if expr.len() < 1 {
-                return Err(TypeError {msg: ~"Null expression is invalid", line: token.line})
+                return Ok(Token {value: Nil, line: token.line}) //Err(TypeError {msg: ~"Null expression is invalid", line: token.line})
             }
             match expr.head().value.clone() {
                 grammar::Label(s) => match get_type(scope, s.clone()) {
