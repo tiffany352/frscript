@@ -8,6 +8,7 @@ use frscript::context::*;
 use frscript::stdlib::*;
 use frscript::typechecker::*;
 use frscript::ast::*;
+use frscript::macro::*;
 
 fn pretty_error(line: LineInfo, err: ~str) -> ~str {
     let mut s = ~"";
@@ -32,6 +33,7 @@ fn main() {
         }
         let res = parse(&grammar, grammar.grammar.get(& &"expr"), line, 0)  .map_err(|e| pretty_error(e.line, e.to_str()))
                  .chain(|tree|  build_ast(&mut state.global, tree.clone())  .map_err(|e| pretty_error(e.line, e.to_str())))
+                 .chain(|ast|   expand_macros(&mut state, ast.clone())      .map_err(|e| pretty_error(e.line, e.to_str())))
                  .chain(|ast|   typecheck(&mut state.global, ast.clone())   .map_err(|e| pretty_error(e.line, e.to_str())))
                  .chain(|ast|   eval(&mut state, ast)                       .map_err(|e| pretty_error(e.line, e.to_str())));
         println(match res {

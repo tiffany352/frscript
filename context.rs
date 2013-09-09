@@ -14,8 +14,14 @@ impl Scope {
     pub fn lookup(&self, name: ~str) -> Option<(FRValue, @FRType)> {
         self.atoms.find(&name).chain(|x| Some(x.clone()))
     }
+    pub fn lookup_macro(&self, name: ~str) -> Option<~extern fn(~[AST]) -> AST> {
+        self.macros.find(&name).chain(|x| Some(x.clone()))
+    }
     pub fn define(&mut self, name: ~str, val: FRValue, T: @FRType) {
         self.atoms.insert(name, (val, T));
+    }
+    pub fn macro(&mut self, name: ~str, f: ~extern fn(~[AST]) -> AST) {
+        self.macros.insert(name, f);
     }
 }
 
@@ -36,6 +42,15 @@ impl Context {
             }
         }
         self.global.lookup(name.clone())
+    }
+    pub fn lookup_macro(&self, name: ~str) -> Option<~extern fn(~[AST]) -> AST> {
+        for elem in self.stack.iter() {
+            match elem.lookup_macro(name.clone()) {
+                Some(x) => return Some(x),
+                None => ()
+            }
+        }
+        self.global.lookup_macro(name.clone())
     }
 }
 
