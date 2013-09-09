@@ -9,15 +9,15 @@ use frscript::stdlib::*;
 use frscript::typechecker::*;
 use frscript::ast::*;
 
-fn pretty_error(line: LineInfo, err: ~str) {
+fn pretty_error(line: LineInfo, err: ~str) -> ~str {
+    let mut s = ~"";
     for _ in range(0, line.startslice+2) {
-        print(" ");
+        s = s + " "
     }
     for _ in range(line.startslice, line.endslice) {
-        print("^");
+        s = s + "^";
     }
-    println("");
-    println(err);
+    s + "\n" + err
 }
 
 fn main() {
@@ -27,23 +27,17 @@ fn main() {
     loop {
         print("= ");
         let line = stdin().read_line();
-        match line {
-            ~"quit" => return,
-            ~"exit" => return,
-            _ => match parse(&grammar, grammar.grammar.get(& &"expr"), line, 0) {
-                Err(e) => pretty_error(e.line, e.to_str()),
-                Ok(tree) => match build_ast(&mut state.global, tree.clone()) {
-                    Err(e) => pretty_error(e.line, e.to_str()),
-                    Ok(ast) => match typecheck(&mut state.global, ast.clone()) {
-                        Err(e) => pretty_error(e.line, e.to_str()),
-                        Ok(ast) => match eval(&mut state, ast) {
-                            Ok(v) => println(v.to_str()),
-                            Err(e) => pretty_error(e.line, e.to_str())
-                        }
-                    }
-                }
-            }
+        if line == ~"quit" || line == ~"exit" {
+            return
         }
+        let res = parse(&grammar, grammar.grammar.get(& &"expr"), line, 0)  .map_err(|e| pretty_error(e.line, e.to_str()))
+                 .chain(|tree|  build_ast(&mut state.global, tree.clone())  .map_err(|e| pretty_error(e.line, e.to_str())))
+                 .chain(|ast|   typecheck(&mut state.global, ast.clone())   .map_err(|e| pretty_error(e.line, e.to_str())))
+                 .chain(|ast|   eval(&mut state, ast)                       .map_err(|e| pretty_error(e.line, e.to_str())));
+        println(match res {
+            Ok(v) => v.to_str(),
+            Err(e) => e.to_str()
+        })
     }
 }
 
