@@ -17,7 +17,7 @@ fn list(_: &mut Context, args: ~[FRValue]) -> Result<FRValue, ~str> {
     Ok(List(args))
 }
 
-fn typeof(_: &mut Context, args: ~[FRValue]) -> Result<FRValue, ~str> {
+fn FRtypeof(_: &mut Context, args: ~[FRValue]) -> Result<FRValue, ~str> {
     Ok(String(args.head().FRtype_of().to_str()))
 }
 
@@ -34,10 +34,10 @@ fn test_macro(args: ~[AST]) -> AST {
 }
 
 fn register_stdlib(ctx: &mut Context) {
-    ctx.global.define(~"+",      Function(~add),    @Func(~[Float, Float, Float]));
-    ctx.global.define(~"list",   Function(~list),   @Func(~[Any, ListT]));
-    ctx.global.define(~"typeof", Function(~typeof), @Func(~[Any, StringT]));
-    ctx.global.define(~"typeeq", Function(~typeeq), @Func(~[Any, Any, StringT]));
+    ctx.global.define(~"+",      Function(~add),        @Func(~[Float, Float, Float]));
+    ctx.global.define(~"list",   Function(~list),       @Func(~[Any, ListT]));
+    ctx.global.define(~"typeof", Function(~FRtypeof),   @Func(~[Any, StringT]));
+    ctx.global.define(~"typeeq", Function(~typeeq),     @Func(~[Any, Any, StringT]));
     ctx.global.macro(~"test_macro", ~test_macro);
 }
 
