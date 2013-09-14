@@ -12,18 +12,23 @@ pub enum FRToken {
     FRSeq(~[Token<FRToken>])
 }
 
+impl TokenCreator for FRToken {
+    fn sequence(arr: ~[Token<FRToken>]) -> FRToken {
+        FRSeq(arr.iter()
+                 .filter(|x| match x.value {Whitespace=> false, _=>true})
+                 .map(|x| x.clone())
+                 .collect())
+    }
+    fn raw(s: ~str) -> FRToken {
+        Unparsed(s)
+    }
+}
+
 fn make_number(s: ~str) -> Result<FRToken, ~str> {
     match float::from_str(s) {
         Some(x) => Ok(Number(x)),
         None => Err(~"Failed to parse number")
     }
-}
-
-fn make_sequence(seq: ~[Token<FRToken>]) -> FRToken {
-    FRSeq(seq.iter()
-             .filter(|x| match x.value {Whitespace=>false, _=>true})
-             .map(|x| x.clone())
-             .collect())
 }
 
 fn make_sexpr(tok: FRToken) -> Result<FRToken, ~str> {
@@ -59,7 +64,7 @@ fn make_label(s: ~str) -> Result<FRToken, ~str> {
 }
 
 fn grammar() -> ParseContext<FRToken> {
-    let mut ctx = ParseContext::new(|s| Unparsed(s), make_sequence);
+    let mut ctx = ParseContext::new();
     ctx.rule("space",       ~Set(" \t\n".iter().collect()));
     ctx.rule("ws",          ~Build(~More(~Rule("space")), make_whitespace));
     ctx.rule("sws",         ~Build(~MoreThan(1, ~Rule("space")), make_whitespace));

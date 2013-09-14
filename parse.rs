@@ -30,6 +30,11 @@ pub enum Pattern<'self, T> {
     Map(~Pattern<'self, T>, extern fn(T) -> Result<T, ~str>)
 }
 
+pub trait TokenCreator {
+    fn sequence(~[Token<Self>]) -> Self;
+    fn raw(~str) -> Self;
+}
+
 impl<'self, T:Clone> Mul<~Pattern<'self, T>, ~Pattern<'self, T>> for ~Pattern<'self, T> {
     fn mul(&self, rhs: &~Pattern<'self, T>) -> ~Pattern<'self, T> {
         match (*self.clone(), *rhs.clone()) {
@@ -151,25 +156,23 @@ impl ToStr for SyntaxError {
 pub struct ParseContext<'self, T> {
     grammar: HashMap<&'self str, Pattern<'self, T>>,
     variables: HashMap<~str, Token<T>>,
-    make_token: ~fn(~str) -> T,
-    make_sequence: ~fn(~[Token<T>]) -> T
 }
 
 impl<'self, T> ParseContext<'self, T> {
-    pub fn new(make_token: ~fn(~str) -> T, make_sequence: ~fn(~[Token<T>]) -> T) -> ParseContext<'self, T> {
-        ParseContext {grammar: HashMap::new(), make_token: make_token, make_sequence: make_sequence, variables: HashMap::new()}
+    pub fn new() -> ParseContext<'self, T> {
+        ParseContext {grammar: HashMap::new(), variables: HashMap::new()}
     }
     pub fn rule(&mut self, name: &'self str, rule: ~Pattern<'self, T>) {
         self.grammar.insert(name, *rule);
     }
 }
 
-pub fn parse<'a,'b, T:'static+Clone>(ctx: &'a ParseContext<'a, T>, pat: &'a Pattern<'a, T>, text: &str, position: uint) -> Result<Token<T>, SyntaxError> {
-    let tok = |start, end| {
-        Ok(Token {value: (ctx.make_token)(text.slice(start, end).to_owned()), line: LineInfo::new(text, start+position, end+position)})
+pub fn parse<'a,'b, T:'static+Clone+TokenCreator>(ctx: &'a ParseContext<'a, T>, pat: &'a Pattern<'a, T>, text: &str, position: uint) -> Result<Token<T>, SyntaxError> {
+    let tok: &fn(uint, uint) -> Result<Token<T>, SyntaxError> = |start, end| {
+        Ok(Token {value: TokenCreator::raw(text.slice(start, end).to_owned()), line: LineInfo::new(text, start+position, end+position)})
     };
-    let seq = |children, start:uint, end:uint| {
-        Ok(Token {value: (ctx.make_sequence)(children), line: LineInfo::new(text, start+position, end+position)})
+    let seq: &fn(~[Token<T>], uint, uint) -> Result<Token<T>, SyntaxError> = |children, start, end| {
+        Ok(Token {value: TokenCreator::sequence(children), line: LineInfo::new(text, start+position, end+position)})
     };
     let err = |name, instead, start:uint, end:uint| {
         Err(SyntaxError {pats: ~[name], instead: instead, user_msg: None, line: LineInfo::new(text, start+position, end+position)})
