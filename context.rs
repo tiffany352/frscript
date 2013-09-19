@@ -12,10 +12,10 @@ impl Scope {
         Scope {atoms: HashMap::new(), types: HashMap::new(), macros: HashMap::new()}
     }
     pub fn lookup(&self, name: ~str) -> Option<(FRValue, @FRType)> {
-        self.atoms.find(&name).chain(|x| Some(x.clone()))
+        self.atoms.find(&name).and_then(|x| Some(x.clone()))
     }
     pub fn lookup_macro(&self, name: ~str) -> Option<~extern fn(~[AST]) -> AST> {
-        self.macros.find(&name).chain(|x| Some(x.clone()))
+        self.macros.find(&name).and_then(|x| Some(x.clone()))
     }
     pub fn define(&mut self, name: ~str, val: FRValue, T: @FRType) {
         self.atoms.insert(name, (val, T));
