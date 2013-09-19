@@ -30,6 +30,28 @@ pub enum Pattern<'self, T> {
     Map(~Pattern<'self, T>, extern fn(T) -> Result<T, ~str>)
 }
 
+impl<'self,T:Clone> ToStr for Pattern<'self,T> {
+    fn to_str(&self) -> ~str {
+        match self.clone() {
+            Rule(s) => s.to_owned(),
+            Literal(s) => fmt!("\"%s\"", s.to_owned()),
+            Range(x,y) => fmt!("%%%x-%x", x as uint, y as uint),
+            Chars(n) => fmt!("any*%u", n),
+            Set(a) => fmt!("<One of %s>", a.to_str()),
+            More(p) => fmt!("%s*", p.to_str()),
+            MoreThan(n, p) => fmt!("%s*%u %s*", p.to_str(), n, p.to_str()),
+            Exactly(n, p) => fmt!("%s*%u", p.to_str(), n),
+            LessThan(n, p) => fmt!("%s*-%u", p.to_str(), n),
+            Seq(a) => "(" + a.map(|x| x.to_str()).connect(" ") + ")",
+            Or(a) => "(" + a.map(|x| x.to_str()).connect(" | ") + ")",
+            Diff(p1, p2) => fmt!("(%s - %s)", p1.to_str(), p2.to_str()),
+            Build(p, _) => p.to_str(),
+            Map(p, _) => p.to_str(),
+            _ => ~"NYI"
+        }
+    }
+}
+
 pub trait TokenCreator {
     fn sequence(~[Token<Self>]) -> Self;
     fn raw(~str) -> Self;
@@ -119,7 +141,8 @@ pub struct SyntaxError {
     pats: ~[~str],
     instead: Option<~str>,
     user_msg: Option<~str>,
-    line: LineInfo
+    line: LineInfo,
+    is_malformed: bool
 }
 
 impl ToStr for SyntaxError {
@@ -174,8 +197,8 @@ pub fn parse<'a,'b, T:'static+Clone+TokenCreator>(ctx: &'a ParseContext<'a, T>, 
     let seq: &fn(~[Token<T>], uint, uint) -> Result<Token<T>, SyntaxError> = |children, start, end| {
         Ok(Token {value: TokenCreator::sequence(children), line: LineInfo::new(text, start+position, end+position)})
     };
-    let err = |name, instead, start:uint, end:uint| {
-        Err(SyntaxError {pats: ~[name], instead: instead, user_msg: None, line: LineInfo::new(text, start+position, end+position)})
+    let err = |name, instead, start:uint, end:uint, is_malformed| {
+        Err(SyntaxError {pats: ~[name], instead: instead, user_msg: None, line: LineInfo::new(text, start+position, end+position), is_malformed: is_malformed})
     };
     match *pat {
         Rule(name) => parse(ctx, ctx.grammar.get(&name), text, position),
@@ -183,30 +206,30 @@ pub fn parse<'a,'b, T:'static+Clone+TokenCreator>(ctx: &'a ParseContext<'a, T>, 
             if text.len() >= s.len() && text.slice_to(s.len()) == s {
                 tok(0, s.len())
             } else {
-                err(s.to_owned(), None, 0, s.len())
+                err(s.to_owned(), None, 0, s.len(), false)
             }
         }
         Range(x, y) => {
             if text.char_len() < 1 {
-                return err(fmt!("Character between %c and %c", x, y), Some(~"EOF"), 0, 1)
+                return err(fmt!("Character between %c and %c", x, y), Some(~"EOF"), 0, 1, false)
             }
             let CharRange{ch, next} = text.char_range_at(0);
             if ch <= y && ch >= x {
                 tok(0, next)
             } else {
-                err(fmt!("Character between %c and %c", x, y), None, 0, 1)
+                err(fmt!("Character between %c and %c", x, y), None, 0, 1, false)
             }
         }
         Chars(n) => {
             if text.len() >= n {
                 tok(0, n)
             } else {
-                err(fmt!("%u characters", n), Some(~"EOF"), 0, n)
+                err(fmt!("%u characters", n), Some(~"EOF"), 0, n, false)
             }
         }
         Set(ref arr) => {
             if text.char_len() < 1 {
-                return err(fmt!("One of %?", from_chars(*arr)), Some(~"EOF"), 0, 1)
+                return err(fmt!("One of %?", from_chars(*arr)), Some(~"EOF"), 0, 1, false)
             }
             let CharRange{ch, next} = text.char_range_at(0);
             for elem in arr.iter() {
@@ -214,7 +237,7 @@ pub fn parse<'a,'b, T:'static+Clone+TokenCreator>(ctx: &'a ParseContext<'a, T>, 
                     return tok(0, next)
                 }
             }
-            err(fmt!("One of %?", from_chars(*arr)), None, 0, 1)
+            err(fmt!("One of %?", from_chars(*arr)), None, 0, 1, false)
         }
         More(ref p) => {
             let mut acc = 0;
@@ -225,7 +248,11 @@ pub fn parse<'a,'b, T:'static+Clone+TokenCreator>(ctx: &'a ParseContext<'a, T>, 
                         acc = x.line.endslice - position;
                         res.push(x);
                     }
-                    Err(_) => break
+                    Err(e) => if e.is_malformed {
+                        return Err(e)
+                    } else {
+                        break
+                    }
                 }
             }
             seq(res, 0, acc)
@@ -248,7 +275,11 @@ pub fn parse<'a,'b, T:'static+Clone+TokenCreator>(ctx: &'a ParseContext<'a, T>, 
                         acc = x.line.endslice - position;
                         res.push(x);
                     }
-                    Err(_) => break
+                    Err(e) => if e.is_malformed {
+                        return Err(e)
+                    } else {
+                        break
+                    }
                 }
             }
             seq(res, 0, acc)
@@ -276,7 +307,9 @@ pub fn parse<'a,'b, T:'static+Clone+TokenCreator>(ctx: &'a ParseContext<'a, T>, 
                         acc = x.line.endslice - position;
                         res.push(x);
                     }
-                    Err(_) => break
+                    Err(e) => if e.is_malformed {
+                        return Err(e)
+                    }
                 }
             }
             seq(res, 0, acc)
@@ -290,22 +323,32 @@ pub fn parse<'a,'b, T:'static+Clone+TokenCreator>(ctx: &'a ParseContext<'a, T>, 
                         acc = x.line.endslice - position;
                         res.push(x);
                     }
-                    Err(x) => return Err(x)
+                    Err(x) => if res.len() < 1 {
+                        return Err(x)
+                    } else {
+                        return Err(SyntaxError {pats: x.pats.clone(), instead: x.instead.clone(), user_msg: x.user_msg.clone(), line: x.line.clone(), is_malformed: true})
+                    }
                 }
             }
             seq(res, 0, acc)
         }
         Or(ref arr) => {
+            let mut malformed = None;
             for elem in arr.iter() {
                 match parse(ctx, elem, text, position) {
                     Ok(x) => return Ok(x),
-                    Err(_) => {}
+                    Err(x) => if x.is_malformed && malformed.is_none() {
+                        malformed = Some(x)
+                    },
                 }
             }
-            err(~"Or", None, 0, text.len()) // TODO: Proper error messages here
+            match malformed {
+                Some(e) => Err(e),
+                None => err(pat.to_str(), None, 0, text.len(), false)
+            }
         }
         Diff(ref a, ref b) => match parse(ctx, *b, text, position) {
-            Ok(_) => err(fmt!("Not %?",b), None, 0, text.len()),
+            Ok(_) => err(fmt!("Not %?",b), None, 0, text.len(), false),
             Err(_) => parse(ctx, *a, text, position)
         },
         And(ref p) => match parse(ctx, *p, text, position) {
@@ -320,7 +363,7 @@ pub fn parse<'a,'b, T:'static+Clone+TokenCreator>(ctx: &'a ParseContext<'a, T>, 
                     Ok(Token {value: v, line: x.line})
                 }
                 Err(s) => {
-                    Err(SyntaxError {pats: ~[fmt!("%?", p)], instead: None, user_msg: Some(s), line: x.line})
+                    Err(SyntaxError {pats: ~[fmt!("%?", p)], instead: None, user_msg: Some(s), line: x.line, is_malformed: true})
                 }
             },
             Err(x) => Err(x)
@@ -329,7 +372,7 @@ pub fn parse<'a,'b, T:'static+Clone+TokenCreator>(ctx: &'a ParseContext<'a, T>, 
             Ok(x) => match (*f)(x.value.clone()) {
                 Ok(v) => Ok(Token {value: v, line: x.line}),
                 Err(s) => {
-                    Err(SyntaxError {pats: ~[fmt!("%?", p)], instead: None, user_msg: Some(s), line: x.line})
+                    Err(SyntaxError {pats: ~[fmt!("%?", p)], instead: None, user_msg: Some(s), line: x.line, is_malformed: true})
                 }
             },
             Err(x) => Err(x)
