@@ -203,7 +203,7 @@ pub fn parse<'a,'b, T:'static+Clone+TokenCreator>(ctx: &'a ParseContext<'a, T>, 
     match *pat {
         Rule(name) => parse(ctx, ctx.grammar.get(&name), text, position),
         Literal(s) => {
-            if text.len() >= s.len() && text.slice_to(s.len()) == s {
+            if text.len() >= s.len() && text.slice_chars(0, s.char_len()) == s {
                 tok(0, s.len())
             } else {
                 err(s.to_owned(), None, 0, s.len(), false)
@@ -221,8 +221,8 @@ pub fn parse<'a,'b, T:'static+Clone+TokenCreator>(ctx: &'a ParseContext<'a, T>, 
             }
         }
         Chars(n) => {
-            if text.len() >= n {
-                tok(0, n)
+            if text.char_len() >= n {
+                tok(0, text.slice_chars(0, n).len())
             } else {
                 err(fmt!("%u characters", n), Some(~"EOF"), 0, n, false)
             }
