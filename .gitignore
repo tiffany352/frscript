@@ -1,2 +1,3 @@
-frsi
 *.so
+.rust/*
+build/*

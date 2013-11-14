@@ -1,8 +1,13 @@
 ## FRScript
 
-One day I decided to write a scripting language based on S-exprs with type checking and FRP functionality and a syntax frontend to avoid parens. Very early stage, will probaby be rewritten in another language eventually
+One day I decided to write a scripting language based on S-exprs with type checking and FRP functionality and a syntax frontend to avoid parens. This is a WIP language, and not much is worked out yet.
 
-## Usage
+## Usage - Rust Implementation
+
+    $ rustc frscript.rc
+    $ rustc -L. frsi.rs
+
+## Usage - Deprecated Lua Implementation
 
 You can `require 'frscript'` and execute scripts using that, or you can start an interactive interpreter with:
 

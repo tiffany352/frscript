@@ -1,5 +1,5 @@
 use parse::*;
-use std::float;
+use std::from_str;
 
 #[deriving(Clone)]
 pub enum FRToken {
@@ -7,7 +7,7 @@ pub enum FRToken {
     Whitespace,
     Label(~str),
     String(~str),
-    Number(float),
+    Number(f32),
     SExpr(~[Token<FRToken>]),
     FRSeq(~[Token<FRToken>])
 }
@@ -25,7 +25,7 @@ impl TokenCreator for FRToken {
 }
 
 fn make_number(s: ~str) -> Result<FRToken, ~str> {
-    match float::from_str(s) {
+    match from_str::from_str::<f32>(s) {
         Some(x) => Ok(Number(x)),
         None => Err(~"Failed to parse number")
     }
@@ -63,7 +63,7 @@ fn make_label(s: ~str) -> Result<FRToken, ~str> {
     Ok(Label(s))
 }
 
-fn grammar() -> ParseContext<FRToken> {
+pub fn grammar() -> ParseContext<FRToken> {
     let mut ctx = ParseContext::new();
     ctx.rule("space",       ~Set(" \t\n".iter().collect()));
     ctx.rule("ws",          ~Build(~More(~Rule("space")), make_whitespace));

@@ -27,7 +27,7 @@ fn call(ctx: &mut Context, f: ~extern fn(&mut Context,~[FRValue]) -> Result<FRVa
     }
 }
 
-fn eval(ctx: &mut Context, tok: AST) -> Result<FRValue, EvalError> {
+pub fn eval(ctx: &mut Context, tok: AST) -> Result<FRValue, EvalError> {
     match tok.node.clone() {
         Expr(l, args) => match ctx.lookup(l.clone()) {
             Some((v,_)) => match v {

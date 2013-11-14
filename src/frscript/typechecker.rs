@@ -16,7 +16,7 @@ impl ToStr for TypeError {
 pub fn get_type(scope: &context::Scope, name: ~str) -> Result<@FRType, ~str> {
     match scope.lookup(name.clone()) {
         Some((_, t)) => Ok(t),
-        None => Err(fmt!("No such variable %s", name)),
+        None => Err(format!("No such variable {:s}", name)),
     }
 }
 
@@ -30,7 +30,7 @@ pub fn typecheck(scope: &mut context::Scope, token: AST) -> Result<AST, TypeErro
                     @Func(ref sig) => {
                         let mut res = ~[];
                         if sig.len() - 1 != args.len() {
-                            return Err(TypeError {msg: fmt!("Function takes %u parameters, %u provided", sig.len()-1, args.len()), line: token.line})
+                            return Err(TypeError {msg: format!("Function takes {:u} parameters, {:u} provided", sig.len()-1, args.len()), line: token.line})
                         }
                         for e in args.iter() {
                             match typecheck(scope, e.clone()) {
@@ -44,12 +44,12 @@ pub fn typecheck(scope: &mut context::Scope, token: AST) -> Result<AST, TypeErro
                                 (_, x) => x
                             };
                             if T != T2 {
-                                return Err(TypeError {msg: fmt!("Mismatched types: Expected %s, got %s", T.to_str(), v.typeinfo.to_str()), line: v.line})
+                                return Err(TypeError {msg: format!("Mismatched types: Expected {:s}, got {:s}", T.to_str(), v.typeinfo.to_str()), line: v.line})
                             }
                         }
                         build_expr(atom, res, t)
                     }
-                    _ => Err(TypeError {msg: fmt!("Expected function, got %s", t.to_str()), line: token.line})
+                    _ => Err(TypeError {msg: format!("Expected function, got {:s}", t.to_str()), line: token.line})
                 }
             },
             Err(s) => Err(TypeError {msg: s, line: token.line})

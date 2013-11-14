@@ -3,11 +3,11 @@ use parse::*;
 use ast::*;
 
 fn add(_: &mut Context, args: ~[FRValue]) -> Result<FRValue, ~str> {
-    let mut sum = 0f;
+    let mut sum = 0f32;
     for v in args.iter() {
         match *v {
             Number(n) => sum += n,
-            _ => return Err(fmt!("WTF: Expected number, got %?, this should have been caught by the type checker", v))
+            _ => return Err(format!("WTF: Expected number, got {:?}, this should have been caught by the type checker", v))
         }
     }
     Ok(Number(sum))
@@ -22,7 +22,7 @@ fn FRtypeof(_: &mut Context, args: ~[FRValue]) -> Result<FRValue, ~str> {
 }
 
 fn typeeq(_: &mut Context, args: ~[FRValue]) -> Result<FRValue, ~str> {
-    Ok(String(fmt!("%b", args[0].FRtype_of() == args[1].FRtype_of())))
+    Ok(String(format!("{}", args[0].FRtype_of() == args[1].FRtype_of())))
 }
 
 fn test_macro(args: ~[AST]) -> AST {
@@ -33,7 +33,7 @@ fn test_macro(args: ~[AST]) -> AST {
     }
 }
 
-fn register_stdlib(ctx: &mut Context) {
+pub fn register_stdlib(ctx: &mut Context) {
     ctx.global.define(~"+",      Function(~add),        @Func(~[Float, Float, Float]));
     ctx.global.define(~"list",   Function(~list),       @Func(~[Any, ListT]));
     ctx.global.define(~"typeof", Function(~FRtypeof),   @Func(~[Any, StringT]));

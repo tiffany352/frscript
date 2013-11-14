@@ -8,6 +8,8 @@
 
 #[ crate_type="lib" ];
 
+#[feature(globs)];
+
 pub mod parse;
 pub mod grammar;
 pub mod ast;

@@ -1,8 +1,10 @@
+#[feature(globs)];
+
 extern mod frscript; 
 
+use std::io::*;
 use frscript::parse::*;
 use frscript::grammar::*;
-use std::io::*;
 use frscript::eval::*;
 use frscript::context::*;
 use frscript::stdlib::*;

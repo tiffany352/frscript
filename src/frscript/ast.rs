@@ -88,7 +88,7 @@ impl FRType {
 #[deriving(Clone)]
 pub enum FRValue {
     String(~str),
-    Number(float),
+    Number(f32),
     List(~[FRValue]),
     Function(~extern fn(&mut context::Context,~[FRValue]) -> Result<FRValue, ~str>),
     Nil
@@ -97,8 +97,8 @@ pub enum FRValue {
 impl ToStr for FRValue {
     fn to_str(&self) -> ~str {
         match self.clone() {
-            String(s)       => fmt!("\"%s\"", s),
-            Number(n)       => fmt!("%f", n),
+            String(s)       => format!("\"{:s}\"", s),
+            Number(n)       => format!("{:f}", n),
             List(l)         => "(" + l.map(|x| x.to_str()).connect(" ") + ")",
             Function(_)     => ~"function",
             Nil             => ~"()",
@@ -136,9 +136,9 @@ pub fn build_ast(scope: &mut context::Scope, tok: Token<grammar::FRToken>) -> Re
     let build_literal = |val: FRValue| Ok(AST {node: Literal(val.clone()), line: tok.line, typeinfo: val.FRtype_of()});
     let build_expr = |atom, args| Ok(AST {node: Expr(atom, args), line: tok.line, typeinfo: @Unit});
     match tok.value.clone() {
-        grammar::Unparsed(t) => Err(ParseError {msg: fmt!("Unexpected token: %?", t), line: tok.line}),
+        grammar::Unparsed(t) => Err(ParseError {msg: format!("Unexpected token: {:?}", t), line: tok.line}),
         grammar::Whitespace => Err(ParseError {msg: ~"Unexpected whitespace token", line: tok.line}),
-        grammar::FRSeq(a) => Err(ParseError {msg: fmt!("Unexpected token: %?", a), line: tok.line}),
+        grammar::FRSeq(a) => Err(ParseError {msg: format!("Unexpected token: {:?}", a), line: tok.line}),
         grammar::Label(s) => build_var(s),
         grammar::String(s) => build_literal(String(s)),
         grammar::Number(v) => build_literal(Number(v)),
@@ -156,7 +156,7 @@ pub fn build_ast(scope: &mut context::Scope, tok: Token<grammar::FRToken>) -> Re
                     }
                     build_expr(s, res)
                 }
-                t => Err(ParseError {msg: fmt!("Expected atom, got %?", t), line: arr[0].line})
+                t => Err(ParseError {msg: format!("Expected atom, got {:?}", t), line: arr[0].line})
             }
         },
     }
