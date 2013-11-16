@@ -9,6 +9,7 @@
 #[ crate_type="lib" ];
 
 #[feature(globs)];
+#[feature(struct_variant)];
 
 pub mod parse;
 pub mod grammar;

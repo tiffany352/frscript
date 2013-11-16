@@ -27,7 +27,7 @@ impl Scope {
 
 pub struct Context {
     global: Scope,
-    stack: ~[Scope]
+    stack: ~[Scope],
 }
 
 impl Context {

@@ -1,5 +1,6 @@
 use parse::*;
 use std::from_str;
+use std::vec;
 
 #[deriving(Clone)]
 pub enum FRToken {
@@ -9,7 +10,8 @@ pub enum FRToken {
     String(~str),
     Number(f32),
     SExpr(~[Token<FRToken>]),
-    FRSeq(~[Token<FRToken>])
+    FRSeq(~[Token<FRToken>]),
+    Expr(~[Token<FRToken>])
 }
 
 impl TokenCreator for FRToken {
@@ -63,8 +65,43 @@ fn make_label(s: ~str) -> Result<FRToken, ~str> {
     Ok(Label(s))
 }
 
+fn make_expr(tok: FRToken) -> Result<FRToken, ~str> {
+    /* 
+    FRSeq(~[
+        parse::Token<grammar::FRToken>{
+            value: Number(4f32)
+        }, 
+        parse::Token<grammar::FRToken>{
+            value: FRSeq(~[
+                parse::Token<grammar::FRToken>{
+                    value: FRSeq(~[
+                        parse::Token<grammar::FRToken>{
+                            value: Number(4f32), 
+                        }
+                    ])
+                }, 
+                parse::Token<grammar::FRToken>{
+                    value: FRSeq(~[
+                        parse::Token<grammar::FRToken>{
+                            value: Number(4f32), 
+                        }
+                    ])
+                }
+            ])
+        }
+    ])
+    */
+    //println!("{:?}", tok);
+    match tok {
+        FRSeq([start, Token {value: FRSeq(rest), line: _}]) => Ok(Expr(vec::append(~[start], rest.map(|x| match x.value {FRSeq([ref v]) => v.clone(), _ => fail!("???")})))),
+        _ => Err(~"Failed to construct expr")
+    }
+}
+
 pub fn grammar() -> ParseContext<FRToken> {
     let mut ctx = ParseContext::new();
+    let sws = || ~Rule("sws");
+    let ws = || ~Rule("ws");
     ctx.rule("space",       ~Set(" \t\n".iter().collect()));
     ctx.rule("ws",          ~Build(~More(~Rule("space")), make_whitespace));
     ctx.rule("sws",         ~Build(~MoreThan(1, ~Rule("space")), make_whitespace));
@@ -76,8 +113,17 @@ pub fn grammar() -> ParseContext<FRToken> {
     ctx.rule("atom",        ~Build((~Rule("alpha") + ~Rule("digit") + ~Rule("symbol"))[1], make_label));
     ctx.rule("string_mid",  ~Build(~More(~Diff(~Literal("\\\"") + ~Chars(1), ~Literal("\""))), make_string_mid));
     ctx.rule("string",      ~Map(~Literal("\"") * ~Rule("string_mid") * ~Literal("\""), make_string));
-    ctx.rule("sexpr",       ~Map(~Literal("(") * ~Rule("ws") * ~LessThan(1, ~Rule("expr")) * (~Rule("sws") * ~Rule("expr"))[0] * ~Rule("ws") * ~Literal(")"), make_sexpr));
-    ctx.rule("expr",        ~Rule("sexpr") + ~Rule("number") + ~Rule("atom") + ~Rule("string"));
+    //ctx.rule("sexpr",       ~Map(~Literal("(") * ~Rule("ws") * ~LessThan(1, ~Rule("expr")) * (~Rule("sws") * ~Rule("expr"))[0] * ~Rule("ws") * ~Literal(")"), make_sexpr));
+    //ctx.rule("expr",        ~Rule("sexpr") + ~Rule("number") + ~Rule("atom") + ~Rule("string"));
+    ctx.rule("toplevel",    ~Rule("def") + ~Rule("data") + ~Rule("impl"));
+    ctx.rule("repl-stat",   ~Rule("toplevel") + ~Rule("expr"));
+    ctx.rule("expr",        ~Map(~Rule("expratom") * ~More(sws() * ~Rule("expratom")), make_expr));
+    ctx.rule("expratom",    ~Rule("number") + ~Rule("atom") + ~Rule("string") + ~Rule("control"));
+    ctx.rule("control",     ~Rule("if"));
+    ctx.rule("if",          ~Literal("if") * ~Rule("sws") * ~Rule("expr") * ~Rule("sws") * ~Literal(":") * ~Rule("block"));
+    ctx.rule("def",         ~Literal("def") * sws() * ~Rule("atom") * ~Literal(":") * sws() * ~Rule("block"));
+    ctx.rule("data",        ~Literal("data") * sws() * ~Rule("atom") * ws() * ~Literal("::") * ws() * ~Rule("typespec"));
+    ctx.rule("impl",        ~Literal("impl") * sws() * ~Rule("atom") * sws() * ~Rule("atom") * ~Literal(":") * ~Rule("implblock"));
 
     ctx
 }

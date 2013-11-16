@@ -9,6 +9,7 @@ pub enum FRType {
     HasField(~str, ~FRType),
     Union(~[FRType]),
     Func(~[FRType]),
+    ExprT {tin: ~[FRType], tout: ~[FRType]},
     StringT,
     Integer,
     Float,
@@ -24,6 +25,7 @@ impl ToStr for FRType {
             HasField(name, T) => name + ": " + T.to_str(),
             Union(a) => a.map(|v| v.to_str()).connect(" + "),
             Func(a) => a.map(|v| v.to_str()).connect(" -> "),
+            ExprT {tin: _, tout: tout} => tout.to_str(),
             StringT => ~"str",
             Integer => ~"int",
             Float => ~"float",
@@ -40,11 +42,11 @@ pub trait FRTypeOf {
 impl FRTypeOf for FRValue {
     fn FRtype_of(&self) -> @FRType {
         match self.clone() {
-            String(_)   => @StringT,
-            Number(_)   => @Float,
-            List(_)     => @ListT,
-            Function(_) => @Unit,
-            Nil         => @Unit,
+            String(_)       => @StringT,
+            Number(_)       => @Float,
+            List(_)         => @ListT,
+            Function(_,_)   => @Unit,
+            Nil             => @Unit,
         }
     }
 }
@@ -90,7 +92,7 @@ pub enum FRValue {
     String(~str),
     Number(f32),
     List(~[FRValue]),
-    Function(~extern fn(&mut context::Context,~[FRValue]) -> Result<FRValue, ~str>),
+    Function(~extern fn(&mut context::Context,~[FRValue]) -> Result<~[FRValue], ~str>, uint),
     Nil
 }
 
@@ -100,7 +102,7 @@ impl ToStr for FRValue {
             String(s)       => format!("\"{:s}\"", s),
             Number(n)       => format!("{:f}", n),
             List(l)         => "(" + l.map(|x| x.to_str()).connect(" ") + ")",
-            Function(_)     => ~"function",
+            Function(_,_)   => ~"function",
             Nil             => ~"()",
         }
     }
@@ -108,7 +110,7 @@ impl ToStr for FRValue {
 
 #[deriving(Clone)]
 pub enum ASTNode {
-    Expr(~str, ~[AST]),
+    Expr(~[AST]),
     Var(~str),
     Literal(FRValue)
 }
@@ -134,15 +136,16 @@ impl ToStr for ParseError {
 pub fn build_ast(scope: &mut context::Scope, tok: Token<grammar::FRToken>) -> Result<AST, ParseError> {
     let build_var = |name| Ok(AST {node: Var(name), line: tok.line, typeinfo: @Unit});
     let build_literal = |val: FRValue| Ok(AST {node: Literal(val.clone()), line: tok.line, typeinfo: val.FRtype_of()});
-    let build_expr = |atom, args| Ok(AST {node: Expr(atom, args), line: tok.line, typeinfo: @Unit});
+    let build_expr = |args| Ok(AST {node: Expr(args), line: tok.line, typeinfo: @Unit});
     match tok.value.clone() {
-        grammar::Unparsed(t) => Err(ParseError {msg: format!("Unexpected token: {:?}", t), line: tok.line}),
+        grammar::Unparsed(_t) => Err(ParseError {msg: format!("Unexpected token: {:?}", tok.value), line: tok.line}),
         grammar::Whitespace => Err(ParseError {msg: ~"Unexpected whitespace token", line: tok.line}),
-        grammar::FRSeq(a) => Err(ParseError {msg: format!("Unexpected token: {:?}", a), line: tok.line}),
+        grammar::FRSeq(_a) => Err(ParseError {msg: format!("Unexpected token: {:?}", tok.value), line: tok.line}),
         grammar::Label(s) => build_var(s),
         grammar::String(s) => build_literal(String(s)),
         grammar::Number(v) => build_literal(Number(v)),
-        grammar::SExpr(ref arr) => if arr.len() < 1 {
+        grammar::SExpr(_) => Err(ParseError {msg: format!("Unexpected token: {:?}", tok.value), line: tok.line}),
+        /*if arr.len() < 1 {
             build_literal(Nil)
         } else {
             match arr[0].value.clone() {
@@ -158,7 +161,17 @@ pub fn build_ast(scope: &mut context::Scope, tok: Token<grammar::FRToken>) -> Re
                 }
                 t => Err(ParseError {msg: format!("Expected atom, got {:?}", t), line: arr[0].line})
             }
-        },
+        },*/
+        grammar::Expr(ref arr) => {
+            let mut res = ~[];
+            for t in arr.iter() {
+                match build_ast(scope, t.clone()) {
+                    Ok(v) => res.push(v),
+                    Err(e) => return Err(e)
+                }
+            }
+            build_expr(res)
+        }
     }
 }
 

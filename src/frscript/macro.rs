@@ -12,9 +12,9 @@ impl ToStr for MacroError {
     }
 }
 
-pub fn expand_macros(ctx: &mut Context, ast: AST) -> Result<AST, MacroError> {
+pub fn expand_macros(_ctx: &mut Context, ast: AST) -> Result<AST, MacroError> {
     match ast.node.clone() {
-        Expr(atom, args) => match ctx.lookup_macro(atom.clone()) {
+        /*Expr(arr) => match ctx.lookup_macro(atom.clone()) {
             Some(f) => expand_macros(ctx, (*f)(args)),
             None => {
                 let mut res = ~[];
@@ -26,7 +26,7 @@ pub fn expand_macros(ctx: &mut Context, ast: AST) -> Result<AST, MacroError> {
                 }
                 Ok(AST {node: Expr(atom.clone(), res), line: ast.line, typeinfo: ast.typeinfo})
             },
-        },
+        },*/
         _ => Ok(ast)
     }
 }
