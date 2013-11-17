@@ -11,7 +11,6 @@ pub enum FRToken {
     String(~str),
     Number(f32),
     Bool(bool),
-    SExpr(~[Token<FRToken>]),
     FRSeq(~[Token<FRToken>]),
     Expr(~[Token<FRToken>])
 }
@@ -32,16 +31,6 @@ fn make_number(s: ~str) -> Result<FRToken, ~str> {
     match from_str::from_str::<f32>(s) {
         Some(x) => Ok(Number(x)),
         None => Err(~"Failed to parse number")
-    }
-}
-
-fn make_sexpr(tok: FRToken) -> Result<FRToken, ~str> {
-    fn recurse(arr: ~[Token<FRToken>]) -> ~[Token<FRToken>] {
-        arr.flat_map(|x| match x.value.clone() {FRSeq(a) => recurse(a), Unparsed(_) => ~[], _ => ~[x.clone()]})
-    }
-    match tok {
-        FRSeq(a) => Ok(SExpr(recurse(a))),
-        _ => Err(~"Failed to constuct SExpr")
     }
 }
 
@@ -153,8 +142,6 @@ pub fn grammar() -> ParseContext<FRToken> {
     ctx.rule("atom",        ~Build((~Rule("alpha") + ~Rule("digit") + ~Rule("symbol"))[1], make_label));
     ctx.rule("string_mid",  ~Build(~More(~Diff(~Literal("\\\"") + ~Chars(1), ~Literal("\""))), make_string_mid));
     ctx.rule("string",      ~Map(~Literal("\"") * ~Rule("string_mid") * ~Literal("\""), make_string));
-    //ctx.rule("sexpr",       ~Map(~Literal("(") * ~Rule("ws") * ~LessThan(1, ~Rule("expr")) * (~Rule("sws") * ~Rule("expr"))[0] * ~Rule("ws") * ~Literal(")"), make_sexpr));
-    //ctx.rule("expr",        ~Rule("sexpr") + ~Rule("number") + ~Rule("atom") + ~Rule("string"));
     ctx.rule("toplevel",    ~Rule("def") + ~Rule("data") + ~Rule("impl"));
     ctx.rule("repl-stat",   ~Rule("toplevel") + ~Rule("expr"));
     ctx.rule("expr",        ~Map(~Rule("expratom") * ~More(sws() * ~Rule("expratom")), make_expr));

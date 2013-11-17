@@ -152,24 +152,6 @@ pub fn build_ast(scope: &mut context::Scope, tok: Token<grammar::FRToken>) -> Re
         grammar::String(s) => build_literal(String(s)),
         grammar::Number(v) => build_literal(Number(v)),
         grammar::Bool(b) => build_literal(Bool(b)),
-        grammar::SExpr(_) => Err(ParseError {msg: format!("Unexpected token: {:?}", tok.value), line: tok.line}),
-        /*if arr.len() < 1 {
-            build_literal(Nil)
-        } else {
-            match arr[0].value.clone() {
-                grammar::Label(s) => {
-                    let mut res = ~[];
-                    for t in arr.tail().iter() {
-                        match build_ast(scope, t.clone()) {
-                            Ok(v) => res.push(v),
-                            Err(e) => return Err(e)
-                        }
-                    }
-                    build_expr(s, res)
-                }
-                t => Err(ParseError {msg: format!("Expected atom, got {:?}", t), line: arr[0].line})
-            }
-        },*/
         grammar::Expr(ref arr) => {
             let mut res = ~[];
             for t in arr.iter() {
