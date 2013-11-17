@@ -1,6 +1,7 @@
 use parse::*;
 use std::from_str;
 use std::vec;
+use std::str::*;
 
 #[deriving(Clone)]
 pub enum FRToken {
@@ -9,6 +10,7 @@ pub enum FRToken {
     Label(~str),
     String(~str),
     Number(f32),
+    Bool(bool),
     SExpr(~[Token<FRToken>]),
     FRSeq(~[Token<FRToken>]),
     Expr(~[Token<FRToken>])
@@ -98,6 +100,44 @@ fn make_expr(tok: FRToken) -> Result<FRToken, ~str> {
     }
 }
 
+/*fn count_ws(s: &str) -> (uint, uint, uint) {
+    let mut spaces = 0;
+    let mut tabs = 0;
+    let mut i = 0;
+    while (i < s.len()) {
+        let CharRange {ch, next} = s.char_range_at(i);
+        match ch {
+            ' '     => spaces+=1,
+            '\t'    => tabs+=1,
+            _       => break
+        }
+        i = next;
+    }
+    (spaces, tabs, i)
+}
+
+fn match_block(ctx: &mut ParseContext<FRToken>, s: &str) -> Result<(FRToken, uint), ~str> {
+    let (nspaces, ntabs, i) = count_ws(s);
+    let mut i = i;
+    let mut res = ~[];
+    loop {
+        let res = parse(ctx, &Rule("expr"), s.slice_from(i), i);
+        let (spaces, tabs, offset) = count_ws(s.slice_from(i));
+        if spaces < nspaces || tabs < ntabs {
+            break;
+        }
+        i += offset;
+    }
+}*/
+
+fn make_bool(tok: FRToken) -> Result<FRToken, ~str> {
+    match tok {
+        Unparsed(~"true") => Ok(Bool(true)),
+        Unparsed(~"false") => Ok(Bool(false)),
+        _ => Err(~"Failed to parse boolean")
+    }
+}
+
 pub fn grammar() -> ParseContext<FRToken> {
     let mut ctx = ParseContext::new();
     let sws = || ~Rule("sws");
@@ -118,12 +158,15 @@ pub fn grammar() -> ParseContext<FRToken> {
     ctx.rule("toplevel",    ~Rule("def") + ~Rule("data") + ~Rule("impl"));
     ctx.rule("repl-stat",   ~Rule("toplevel") + ~Rule("expr"));
     ctx.rule("expr",        ~Map(~Rule("expratom") * ~More(sws() * ~Rule("expratom")), make_expr));
-    ctx.rule("expratom",    ~Rule("number") + ~Rule("atom") + ~Rule("string") + ~Rule("control"));
+    ctx.rule("expratom",    ~Rule("literal") + ~Rule("atom") + ~Rule("control"));
+    ctx.rule("literal",     ~Rule("number") + ~Rule("string") + ~Rule("boolean"));
+    ctx.rule("boolean",     ~Map(~Literal("true") + ~Literal("false"), make_bool));
     ctx.rule("control",     ~Rule("if"));
     ctx.rule("if",          ~Literal("if") * ~Rule("sws") * ~Rule("expr") * ~Rule("sws") * ~Literal(":") * ~Rule("block"));
     ctx.rule("def",         ~Literal("def") * sws() * ~Rule("atom") * ~Literal(":") * sws() * ~Rule("block"));
     ctx.rule("data",        ~Literal("data") * sws() * ~Rule("atom") * ws() * ~Literal("::") * ws() * ~Rule("typespec"));
     ctx.rule("impl",        ~Literal("impl") * sws() * ~Rule("atom") * sws() * ~Rule("atom") * ~Literal(":") * ~Rule("implblock"));
+    //ctx.rule("block",       ~Match(match_block));
 
     ctx
 }

@@ -13,6 +13,7 @@ pub enum FRType {
     StringT,
     Integer,
     Float,
+    BoolT,
     Any,
     Unit,
 }
@@ -29,6 +30,7 @@ impl ToStr for FRType {
             StringT => ~"str",
             Integer => ~"int",
             Float => ~"float",
+            BoolT => ~"bool",
             Any => ~"any",
             Unit => ~"()",
         }
@@ -46,6 +48,7 @@ impl FRTypeOf for FRValue {
             Number(_)       => @Float,
             List(_)         => @ListT,
             Function(_,_)   => @Unit,
+            Bool(_)         => @BoolT,
             Nil             => @Unit,
         }
     }
@@ -62,6 +65,7 @@ impl Eq for FRType {
             (StringT, StringT)                  => true,
             (Integer, Integer)                  => true,
             (Float, Float)                      => true,
+            (BoolT, BoolT)                      => true,
             (Any, _)                            => true,
             (Unit, Unit)                        => true,
             _                                   => false
@@ -80,6 +84,7 @@ impl FRType {
             (StringT, StringT)                  => true,
             (Integer, Integer)                  => true,
             (Float, Float)                      => true,
+            (BoolT, BoolT)                      => true,
             (Any, _)                            => true,
             (Unit, Unit)                        => true,
             _                                   => false
@@ -93,6 +98,7 @@ pub enum FRValue {
     Number(f32),
     List(~[FRValue]),
     Function(~extern fn(&mut context::Context,~[FRValue]) -> Result<~[FRValue], ~str>, uint),
+    Bool(bool),
     Nil
 }
 
@@ -103,6 +109,7 @@ impl ToStr for FRValue {
             Number(n)       => format!("{:f}", n),
             List(l)         => "(" + l.map(|x| x.to_str()).connect(" ") + ")",
             Function(_,_)   => ~"function",
+            Bool(b)         => if b { ~"true" } else { ~"false" },
             Nil             => ~"()",
         }
     }
@@ -144,6 +151,7 @@ pub fn build_ast(scope: &mut context::Scope, tok: Token<grammar::FRToken>) -> Re
         grammar::Label(s) => build_var(s),
         grammar::String(s) => build_literal(String(s)),
         grammar::Number(v) => build_literal(Number(v)),
+        grammar::Bool(b) => build_literal(Bool(b)),
         grammar::SExpr(_) => Err(ParseError {msg: format!("Unexpected token: {:?}", tok.value), line: tok.line}),
         /*if arr.len() < 1 {
             build_literal(Nil)

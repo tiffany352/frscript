@@ -24,8 +24,7 @@ pub enum Pattern<'self, T> {
     Always(T),
 
     // parsing
-    Var(~Pattern<'self, T>),
-    Ref(~Pattern<'self, T>),
+    //Match(extern fn(&'self mut ParseContext<T>, &'self str) -> Result<(T, uint), ~str>),
     Build(~Pattern<'self, T>, extern fn(~str) -> Result<T, ~str>),
     Map(~Pattern<'self, T>, extern fn(T) -> Result<T, ~str>)
 }
@@ -356,7 +355,10 @@ pub fn parse<'a,'b, T:'static+Clone+TokenCreator>(ctx: &'a ParseContext<'a, T>, 
             Err(x) => Err(x)
         },
         Always(ref v) => Ok(Token {value: v.clone(), line: LineInfo::new(text, position, position)}),
-        // var and ref would require adding another parameter to parse()
+        /*Match(ref f) => match (*f)(ctx, text) {
+            Ok((v,n)) => Ok(Token {value: v, line: LineInfo::new(position, position+n)}),
+            Err(s) => Err(SyntaxError {pats: ~[pat.to_str()], instead: None, user_msg: Some(s), line: LineInfo::new(position, position+1), is_malformed: false})
+        },*/
         Build(ref p, ref f) => match parse(ctx, *p, text, position) {
             Ok(x) => match (*f)(text.slice(x.line.startslice-position, x.line.endslice-position).to_owned()) {
                 Ok(v) => {
@@ -377,7 +379,7 @@ pub fn parse<'a,'b, T:'static+Clone+TokenCreator>(ctx: &'a ParseContext<'a, T>, 
             },
             Err(x) => Err(x)
         },
-        _ => fail!("NYI")
+        //_ => fail!("NYI")
     }
 }
 

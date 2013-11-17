@@ -33,7 +33,7 @@ fn main() {
         if line == ~"quit" || line == ~"exit" {
             return
         }
-        let res = parse(&grammar, grammar.grammar.get(& &"expr"), line, 0)          .map_err(|e| pretty_error(e.line, e.to_str()))
+        let res = parse(&grammar, grammar.grammar.get(& &"repl-stat"), line, 0)     .map_err(|e| pretty_error(e.line, e.to_str()))
                  .and_then(|tree|  build_ast(&mut state.global, tree.clone())       .map_err(|e| pretty_error(e.line, e.to_str())))
                  .and_then(|ast|   expand_macros(&mut state, ast.clone())           .map_err(|e| pretty_error(e.line, e.to_str())))
                  .and_then(|ast|   typecheck(&mut state.global, ast.clone(), ~[])   .map_err(|e| pretty_error(e.line, e.to_str())))

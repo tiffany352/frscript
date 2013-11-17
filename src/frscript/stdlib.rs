@@ -22,7 +22,7 @@ fn FRtypeof(_: &mut Context, args: ~[FRValue]) -> Result<~[FRValue], ~str> {
 }
 
 fn typeeq(_: &mut Context, args: ~[FRValue]) -> Result<~[FRValue], ~str> {
-    Ok(~[String(format!("{}", args[0].FRtype_of() == args[1].FRtype_of()))])
+    Ok(~[Bool(args[0].FRtype_of() == args[1].FRtype_of())])
 }
 
 fn test_macro(_args: ~[AST]) -> AST {
