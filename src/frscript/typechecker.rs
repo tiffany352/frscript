@@ -39,7 +39,7 @@ pub fn typecheck(scope: &mut context::Scope, token: AST, typestack: ~[FRType]) -
                         }
                         for i in range(0, tin.len()) {
                             let ti = i + typestack.len() - tin.len();
-                            if tin[ti] != typestack[i] {
+                            if tin[i] != typestack[ti] {
                                 return Err(TypeError {msg: format!(r"Bad argument \#{:u}: Expected {:s}, got {:s}", 
                                                                    i+1, 
                                                                    tin[i].to_str(), 
@@ -58,7 +58,7 @@ pub fn typecheck(scope: &mut context::Scope, token: AST, typestack: ~[FRType]) -
                         }
                         for i in range(0, arr.len()-1) {
                             let ti = i + typestack.len() - (arr.len()-1);
-                            if arr[ti] != typestack[i] {
+                            if arr[i] != typestack[ti] {
                                 return Err(TypeError {msg: format!(r"Bad argument \#{:u}{:s}: Expected {:s}, got {:s}",
                                                                    i+1,
                                                                    match node.clone() {
